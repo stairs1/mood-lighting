@@ -7,6 +7,7 @@
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "nvs_flash.h"
+#include "driver/ledc.h"
 
 #include "mongoose.h"
 #include "webpage.h"
@@ -16,8 +17,68 @@
 
 #define MG_LISTEN_ADDR "80"
 
-extern const uint8_t controller_html_start[] asm("_binary_controller_html_start");
-extern const uint8_t controller_html_end[] asm("_binary_controller_html_end");
+ledc_timer_config_t ledc_timer = {
+    .duty_resolution = 10,
+    .freq_hz = 1000,
+    .speed_mode = LEDC_HIGH_SPEED_MODE,
+    .timer_num = LEDC_TIMER_0,
+    .clk_cfg = LEDC_AUTO_CLK,
+  };
+
+ledc_channel_config_t ledc_channels[3] = {
+  {
+    .channel = LEDC_CHANNEL_0,
+    .duty = 0,
+    .gpio_num = 4,
+    .speed_mode = LEDC_HIGH_SPEED_MODE,
+    .hpoint = 0,
+    .timer_sel = LEDC_TIMER_0,
+  },
+  {
+    .channel = LEDC_CHANNEL_1,
+    .duty = 0,
+    .gpio_num = 18,
+    .speed_mode = LEDC_HIGH_SPEED_MODE,
+    .hpoint = 0,
+    .timer_sel = LEDC_TIMER_0,
+  },
+  {
+    .channel = LEDC_CHANNEL_2,
+    .duty = 0,
+    .gpio_num = 19,
+    .speed_mode = LEDC_HIGH_SPEED_MODE,
+    .hpoint = 0,
+    .timer_sel = LEDC_TIMER_0,
+  },
+};
+
+static void init_leds(){
+  
+  ledc_timer_config(&ledc_timer);
+  for(int ch = 0; ch < 3; ch++){
+    ledc_channel_config(&ledc_channels[ch]);
+  }
+  ledc_fade_func_install(0);
+
+  //test only
+  ledc_set_duty(ledc_channels[0].speed_mode, ledc_channels[0].channel, 500);
+  ledc_update_duty(ledc_channels[0].speed_mode, ledc_channels[0].channel);
+}
+
+static void set_leds(int red, int green, int blue){
+  if(red >=0 && red <= 1023){
+    ledc_set_duty(ledc_channels[0].speed_mode, ledc_channels[0].channel, red);
+    ledc_update_duty(ledc_channels[0].speed_mode, ledc_channels[0].channel);
+  }
+  if(green >= 0 && green <= 1023){
+    ledc_set_duty(ledc_channels[1].speed_mode, ledc_channels[1].channel, green);
+    ledc_update_duty(ledc_channels[1].speed_mode, ledc_channels[1].channel);
+  }
+  if(blue >= 0 && blue <= 1023){
+    ledc_set_duty(ledc_channels[2].speed_mode, ledc_channels[2].channel, blue);
+    ledc_update_duty(ledc_channels[2].speed_mode, ledc_channels[2].channel);
+  }
+}
 
 static esp_err_t event_handler(void *ctx, system_event_t *event) {
   (void) ctx;
@@ -69,8 +130,8 @@ static void default_endpoint(struct http_message *hm, struct mg_connection *nc){
 
     // red=xxx&green=xxx&blue=xxx
     // takes form variables. May add json support later
-    // takes a 3-digit number for each color. Intended range 0-255.
-    char sred[4], sgreen[4], sblue[4];
+    // takes a 4-digit number for each color. Intended range 0-255.
+    char sred[5], sgreen[5], sblue[5];
     int red = -1, green = -1, blue = -1;
     if(mg_get_http_var(&hm->body, "red", sred, sizeof(sred)) > 0){
       red = atoi(sred);
@@ -82,6 +143,7 @@ static void default_endpoint(struct http_message *hm, struct mg_connection *nc){
       blue = atoi(sblue);
     }
     printf("%d, %d, %d\n", red, green, blue);
+    set_leds(red, green, blue);
 
     //reload page for extra input
     static const char *reply_fmt =
@@ -92,25 +154,6 @@ static void default_endpoint(struct http_message *hm, struct mg_connection *nc){
       "%s\n";
     mg_printf(nc, reply_fmt, html);
  
-    /* DEBUG
-    static const char *reply_fmt =
-      "HTTP/1.0 200 OK\r\n"
-      "Connection: close\r\n"
-      "Content-Type: text/plain\r\n"
-      "\r\n"
-      "Received %s\n";
-    mg_printf(nc, reply_fmt, buf);
-
-    static const char *rgb_fmt =
-      "HTTP/1.0 200 OK\r\n"
-      "Connection: close\r\n"
-      "Content-Type: text/plain\r\n"
-      "\r\n"
-      "Red: %d\n"
-      "Green: %d\n"
-      "Blue: %d\n";
-    mg_printf(nc, rgb_fmt, red, green, blue);
-    */
   }
   else{
     printf("unsupported http request type\n");
@@ -178,7 +221,10 @@ void app_main(void) {
   tcpip_adapter_init();
   ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
 
-  /* Initializing WiFi */
+  /* Set up lights */
+  init_leds();
+
+  /* Initialize WiFi */
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
   ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
@@ -189,7 +235,7 @@ void app_main(void) {
   ESP_ERROR_CHECK(esp_wifi_start());
   ESP_ERROR_CHECK(esp_wifi_connect());
 
-  /* Starting Mongoose */
+  /* Start Mongoose */
   struct mg_mgr mgr;
   struct mg_connection *nc;
 

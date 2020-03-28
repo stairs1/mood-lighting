@@ -5,6 +5,7 @@ set(app_sources
 	"main.c"
 	"mongoose.c"
 	"mongoose.h"
+	"webpage.h"
 )
 
 idf_component_register(SRCS ${app_sources})

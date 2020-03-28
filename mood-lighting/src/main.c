@@ -9,11 +9,15 @@
 #include "nvs_flash.h"
 
 #include "mongoose.h"
+#include "webpage.h"
 
 #define WIFI_SSID "not"
 #define WIFI_PASS "it"
 
 #define MG_LISTEN_ADDR "80"
+
+extern const uint8_t controller_html_start[] asm("_binary_controller_html_start");
+extern const uint8_t controller_html_end[] asm("_binary_controller_html_end");
 
 static esp_err_t event_handler(void *ctx, system_event_t *event) {
   (void) ctx;
@@ -48,10 +52,13 @@ static void default_endpoint(struct http_message *hm, struct mg_connection *nc){
     static const char *reply_fmt =
       "HTTP/1.0 200 OK\r\n"
       "Connection: close\r\n"
-      "Content-Type: text/plain\r\n"
+      "Content-Type: text/html\r\n"
       "\r\n"
-      "Hello %s\n";
-    mg_printf(nc, reply_fmt, addr);
+      "%s\n";
+    // read from controller_html_start to controller_html_end.
+    // send this data as text/html in response body.
+    mg_printf(nc, reply_fmt, html);
+    // mg_printf(nc, reply_fmt, addr);
   }
   else if(mg_vcmp(&hm->method, "POST") == 0){
     printf("POST\n");
@@ -74,7 +81,18 @@ static void default_endpoint(struct http_message *hm, struct mg_connection *nc){
     if(mg_get_http_var(&hm->body, "blue", sblue, sizeof(sblue)) > 0){
       blue = atoi(sblue);
     }
+    printf("%d, %d, %d\n", red, green, blue);
 
+    //reload page for extra input
+    static const char *reply_fmt =
+      "HTTP/1.0 200 OK\r\n"
+      "Connection: close\r\n"
+      "Content-Type: text/html\r\n"
+      "\r\n"
+      "%s\n";
+    mg_printf(nc, reply_fmt, html);
+ 
+    /* DEBUG
     static const char *reply_fmt =
       "HTTP/1.0 200 OK\r\n"
       "Connection: close\r\n"
@@ -92,6 +110,7 @@ static void default_endpoint(struct http_message *hm, struct mg_connection *nc){
       "Green: %d\n"
       "Blue: %d\n";
     mg_printf(nc, rgb_fmt, red, green, blue);
+    */
   }
   else{
     printf("unsupported http request type\n");

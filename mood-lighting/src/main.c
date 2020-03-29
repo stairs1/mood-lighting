@@ -60,9 +60,13 @@ static void init_leds(){
   }
   ledc_fade_func_install(0);
 
-  //test only
-  ledc_set_duty(ledc_channels[0].speed_mode, ledc_channels[0].channel, 500);
+  // default to a nice soft yellow
+  ledc_set_duty(ledc_channels[0].speed_mode, ledc_channels[0].channel, 700);
   ledc_update_duty(ledc_channels[0].speed_mode, ledc_channels[0].channel);
+  ledc_set_duty(ledc_channels[1].speed_mode, ledc_channels[1].channel, 400);
+  ledc_update_duty(ledc_channels[1].speed_mode, ledc_channels[1].channel);
+  ledc_set_duty(ledc_channels[2].speed_mode, ledc_channels[2].channel, 200);
+  ledc_update_duty(ledc_channels[2].speed_mode, ledc_channels[2].channel);
 }
 
 static void set_leds(int red, int green, int blue){
